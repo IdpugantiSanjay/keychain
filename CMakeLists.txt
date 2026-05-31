@@ -85,6 +85,7 @@ install(TARGETS ${PROJECT_NAME}
     PUBLIC_HEADER DESTINATION include/keychain)
 
 if (BUILD_TESTS)
+    enable_testing()
     add_subdirectory("test")
     if (SIMULATE_FAILURES)
         target_compile_definitions(${PROJECT_NAME}

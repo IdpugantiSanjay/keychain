@@ -1,0 +1,17 @@
+[tasks.configure]
+description = "Configure a release build (no tests)"
+run = "cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF"
+
+[tasks.configure-dev]
+description = "Configure a debug build with tests enabled"
+run = "cmake -S . -B build-dev -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON"
+
+[tasks.build]
+description = "Build the library in release mode"
+depends = ["configure"]
+run = "cmake --build build --config Release"
+
+[tasks.test]
+description = "Configure (debug+tests), build, and run the test suite"
+depends = ["configure-dev"]
+run = "cmake --build build-dev && cd build-dev && ctest --output-on-failure"

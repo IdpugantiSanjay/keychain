@@ -26,6 +26,7 @@
 #define XPLATFORM_KEYCHAIN_WRAPPER_H_
 
 #include <string>
+#include <vector>
 
 /*! \brief A thin wrapper to provide cross-platform access to the operating
  *         system's credentials storage.
@@ -50,6 +51,16 @@
 namespace keychain {
 
 struct Error;
+
+/*! \brief A credential entry returned by listPasswords
+ *
+ * Contains the identifiers of a stored credential. The password value itself
+ * is not included.
+ */
+struct PasswordEntry {
+    std::string service;
+    std::string user;
+};
 
 /*! \brief Retrieve a password
  *
@@ -83,6 +94,19 @@ void setPassword(const std::string &package, const std::string &service,
  */
 void deletePassword(const std::string &package, const std::string &service,
                     const std::string &user, Error &err);
+
+/*! \brief List all stored credentials for a given package
+ *
+ * Returns the identifiers (service and user) of all credentials stored under
+ * the given package. Password values are not included in the results.
+ *
+ * \param package Used to scope the search to a specific application
+ * \param err Output parameter communicating success or error details
+ *
+ * \return A list of PasswordEntry with service and user fields populated
+ */
+std::vector<PasswordEntry> listPasswords(const std::string &package,
+                                         Error &err);
 
 /*! \brief Check if the keychain is available
  *

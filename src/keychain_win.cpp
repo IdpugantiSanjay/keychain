@@ -250,6 +250,68 @@ void deletePassword(const std::string &package, const std::string &service,
     }
 }
 
+std::vector<PasswordEntry> listPasswords(const std::string &package,
+                                          Error &err) {
+    err = Error{};
+    std::vector<PasswordEntry> entries;
+
+    // CredEnumerateW filter: matches all target names starting with this prefix
+    const std::string filterStr = package + ".*";
+    auto filter = utf8ToWideChar(filterStr);
+    if (!filter) {
+        updateError(err);
+        return entries;
+    }
+
+    DWORD count = 0;
+    CREDENTIAL **creds = nullptr;
+    bool result = ::CredEnumerateW(filter.get(), 0, &count, &creds);
+
+    if (!result) {
+        const auto code = ::GetLastError();
+        if (code == ERROR_NOT_FOUND)
+            return entries; // no credentials found — not an error
+        err.message = getErrorMessage(code);
+        err.code = code;
+        err.type = ErrorType::GenericError;
+        return entries;
+    }
+
+    const std::string prefix = package + ".";
+    for (DWORD i = 0; i < count; ++i) {
+        if (creds[i]->Type != kCredType)
+            continue;
+
+        const std::string targetName = wideCharToAnsi(creds[i]->TargetName);
+
+        // target name format: package.service/user
+        if (targetName.find(prefix) != 0)
+            continue;
+
+        const std::string remainder = targetName.substr(prefix.size());
+        const auto slash = remainder.find('/');
+
+        PasswordEntry entry;
+        if (slash != std::string::npos) {
+            entry.service = remainder.substr(0, slash);
+            entry.user = remainder.substr(slash + 1);
+        } else {
+            entry.service = remainder;
+        }
+
+        auto isBlank = [](const std::string &s) {
+            return s.find_first_not_of(" \t\r\n") == std::string::npos;
+        };
+        if (isBlank(entry.service) || isBlank(entry.user))
+            continue;
+
+        entries.push_back(std::move(entry));
+    }
+
+    ::CredFree(creds);
+    return entries;
+}
+
 bool isAvailable(Error &err) {
     // Credential Manager is always present on Windows;
     // any runtime errors will surface in get/set/delete.

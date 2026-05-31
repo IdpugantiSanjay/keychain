@@ -105,6 +105,8 @@ void setPassword(const std::string &package, const std::string &service,
     }
 }
 
+
+
 std::string getPassword(const std::string &package, const std::string &service,
                         const std::string &user, Error &err) {
     err = Error{};
@@ -141,6 +143,8 @@ void deletePassword(const std::string &package, const std::string &service,
     const auto schema = makeSchema(package);
     GError *error = NULL;
 
+
+
     bool deleted = secret_password_clear_sync(&schema,
                                               NULL, // not cancellable
                                               &error,
@@ -158,8 +162,57 @@ void deletePassword(const std::string &package, const std::string &service,
     }
 }
 
-bool isAvailable(Error &err) {
+std::vector<PasswordEntry> listPasswords(const std::string &package,
+                                          Error &err) {
     err = Error{};
+    const auto schema = makeSchema(package);
+    GError *error = NULL;
+
+    GList *items = secret_password_search_sync(&schema,
+                                               SECRET_SEARCH_ALL,
+                                               NULL, // not cancellable
+                                               &error,
+                                               NULL);
+
+    std::vector<PasswordEntry> entries;
+
+    if (error != NULL) {
+        updateError(err, error);
+        return entries;
+    }
+
+    for (const GList *node = items; node != NULL; node = node->next) {
+        auto *item =
+            static_cast<SecretRetrievable *>(node->data);
+        GHashTable *attrs = secret_retrievable_get_attributes(item);
+        if (attrs == NULL)
+            continue;
+
+        PasswordEntry entry;
+        const auto *svc = static_cast<const gchar *>(
+            g_hash_table_lookup(attrs, ServiceFieldName));
+        const auto *acct = static_cast<const gchar *>(
+            g_hash_table_lookup(attrs, AccountFieldName));
+
+        if (svc != NULL)
+            entry.service = svc;
+        if (acct != NULL)
+            entry.user = acct;
+
+        auto isBlank = [](const std::string &s) {
+            return s.find_first_not_of(" \t\r\n") == std::string::npos;
+        };
+        if (!isBlank(entry.service) && !isBlank(entry.user))
+            entries.push_back(std::move(entry));
+
+        g_hash_table_unref(attrs);
+    }
+
+    g_list_free_full(items, g_object_unref);
+    return entries;
+}
+
+bool isAvailable(Error &err) {
 
 #ifdef SIMULATE_FAILURES
     // TEST HOOK: Simulate failure to create SecretService

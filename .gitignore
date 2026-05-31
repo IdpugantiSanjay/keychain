@@ -1,5 +1,6 @@
 _build/*
 build/*
+build-dev/*
 
 compile_commands.json
 tags
@@ -7,3 +8,4 @@ tags
 .vscode
 keychain.sublime-project
 keychain.sublime-workspace
+.idea

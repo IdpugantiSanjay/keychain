@@ -146,4 +146,134 @@ TEST_CASE("Keychain", "[keychain]") {
         REQUIRE(available);
         check_no_error(ec);
     }
+
+    SECTION("listPasswords returns empty list for unknown package") {
+        Error ec{};
+        auto entries = listPasswords("com.example.no-such-package", ec);
+        check_no_error(ec);
+        CHECK(entries.empty());
+    }
+
+    SECTION("listPasswords returns entries after setPassword") {
+        const std::string pkg = "com.example.keychain-list-tests";
+        Error ec{};
+        setPassword(pkg, service, user, password, ec);
+        check_no_error(ec);
+
+        ec = Error{};
+        auto entries = listPasswords(pkg, ec);
+        check_no_error(ec);
+        REQUIRE(entries.size() == 1);
+        CHECK(entries[0].service == service);
+        CHECK(entries[0].user == user);
+
+        ec = Error{};
+        deletePassword(pkg, service, user, ec);
+        check_no_error(ec);
+    }
+
+    SECTION("listPasswords reflects multiple credentials") {
+        const std::string pkg = "com.example.keychain-list-multi";
+        Error ec{};
+        setPassword(pkg, "svc1", "alice", password, ec);
+        check_no_error(ec);
+        ec = Error{};
+        setPassword(pkg, "svc2", "bob", password, ec);
+        check_no_error(ec);
+
+        ec = Error{};
+        auto entries = listPasswords(pkg, ec);
+        check_no_error(ec);
+        CHECK(entries.size() == 2);
+
+        ec = Error{};
+        deletePassword(pkg, "svc1", "alice", ec);
+        check_no_error(ec);
+        ec = Error{};
+        deletePassword(pkg, "svc2", "bob", ec);
+        check_no_error(ec);
+    }
+
+    SECTION("listPasswords returns empty after all passwords deleted") {
+        const std::string pkg = "com.example.keychain-list-delete";
+        Error ec{};
+        setPassword(pkg, service, user, password, ec);
+        check_no_error(ec);
+
+        ec = Error{};
+        deletePassword(pkg, service, user, ec);
+        check_no_error(ec);
+
+        ec = Error{};
+        auto entries = listPasswords(pkg, ec);
+        check_no_error(ec);
+        CHECK(entries.empty());
+    }
+
+    SECTION("listPasswords excludes entries with empty service") {
+        const std::string pkg = "com.example.keychain-list-blank-svc";
+        Error ec{};
+        setPassword(pkg, "", user, password, ec);
+        // only proceed if the platform accepted the entry
+        if (!ec) {
+            ec = Error{};
+            auto entries = listPasswords(pkg, ec);
+            check_no_error(ec);
+            for (const auto &e : entries)
+                CHECK_FALSE(e.service.empty());
+
+            ec = Error{};
+            deletePassword(pkg, "", user, ec);
+        }
+    }
+
+    SECTION("listPasswords excludes entries with empty user") {
+        const std::string pkg = "com.example.keychain-list-blank-usr";
+        Error ec{};
+        setPassword(pkg, service, "", password, ec);
+        if (!ec) {
+            ec = Error{};
+            auto entries = listPasswords(pkg, ec);
+            check_no_error(ec);
+            for (const auto &e : entries)
+                CHECK_FALSE(e.user.empty());
+
+            ec = Error{};
+            deletePassword(pkg, service, "", ec);
+        }
+    }
+
+    SECTION("listPasswords excludes entries with whitespace-only service") {
+        const std::string pkg = "com.example.keychain-list-ws-svc";
+        Error ec{};
+        setPassword(pkg, "   ", user, password, ec);
+        if (!ec) {
+            ec = Error{};
+            auto entries = listPasswords(pkg, ec);
+            check_no_error(ec);
+            for (const auto &e : entries)
+                CHECK(e.service.find_first_not_of(" \t\r\n") !=
+                      std::string::npos);
+
+            ec = Error{};
+            deletePassword(pkg, "   ", user, ec);
+        }
+    }
+
+    SECTION("listPasswords excludes entries with whitespace-only user") {
+        const std::string pkg = "com.example.keychain-list-ws-usr";
+        Error ec{};
+        setPassword(pkg, service, "   ", password, ec);
+        if (!ec) {
+            ec = Error{};
+            auto entries = listPasswords(pkg, ec);
+            check_no_error(ec);
+            for (const auto &e : entries)
+                CHECK(e.user.find_first_not_of(" \t\r\n") !=
+                      std::string::npos);
+
+            ec = Error{};
+            deletePassword(pkg, service, "   ", ec);
+        }
+    }
 }

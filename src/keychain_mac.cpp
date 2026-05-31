@@ -270,6 +270,74 @@ void deletePassword(const std::string &package, const std::string &service,
     updateError(err, SecItemDelete(query.get()));
 }
 
+std::vector<PasswordEntry> listPasswords(const std::string &package,
+                                          Error &err) {
+    err = Error{};
+    std::vector<PasswordEntry> entries;
+
+    auto query = createCFMutableDictionary(err);
+    if (err.type != keychain::ErrorType::NoError)
+        return entries;
+
+    const std::string prefix = package + ".";
+    const auto cfPrefix = createCFStringWithCString(prefix, err);
+    if (err.type != keychain::ErrorType::NoError)
+        return entries;
+
+    CFDictionaryAddValue(query.get(), kSecClass, kSecClassGenericPassword);
+    CFDictionaryAddValue(query.get(), kSecMatchLimit, kSecMatchLimitAll);
+    CFDictionaryAddValue(query.get(), kSecReturnAttributes, kCFBooleanTrue);
+
+    CFTypeRef rawResult = nullptr;
+    OSStatus status = SecItemCopyMatching(query.get(), &rawResult);
+
+    if (status == errSecItemNotFound)
+        return entries;
+
+    if (status != errSecSuccess) {
+        updateError(err, status);
+        return entries;
+    }
+
+    const auto resultArray =
+        ScopedCFRef<CFArrayRef>(static_cast<CFArrayRef>(rawResult));
+
+    CFIndex count = CFArrayGetCount(resultArray.get());
+    for (CFIndex i = 0; i < count; ++i) {
+        auto dict = static_cast<CFDictionaryRef>(
+            CFArrayGetValueAtIndex(resultArray.get(), i));
+
+        auto serviceCF =
+            static_cast<CFStringRef>(CFDictionaryGetValue(dict, kSecAttrService));
+        auto accountCF =
+            static_cast<CFStringRef>(CFDictionaryGetValue(dict, kSecAttrAccount));
+
+        if (serviceCF == nullptr)
+            continue;
+
+        const std::string serviceName = CFStringToStdString(serviceCF);
+
+        // Filter to entries belonging to this package (service = package.X)
+        if (serviceName.find(prefix) != 0)
+            continue;
+
+        PasswordEntry entry;
+        entry.service = serviceName.substr(prefix.size());
+        if (accountCF != nullptr)
+            entry.user = CFStringToStdString(accountCF);
+
+        auto isBlank = [](const std::string &s) {
+            return s.find_first_not_of(" \t\r\n") == std::string::npos;
+        };
+        if (isBlank(entry.service) || isBlank(entry.user))
+            continue;
+
+        entries.push_back(std::move(entry));
+    }
+
+    return entries;
+}
+
 bool isAvailable(Error &err) {
     err = Error{};
 

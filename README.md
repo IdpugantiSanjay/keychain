@@ -4,7 +4,7 @@
 [![Conan Center](https://img.shields.io/conan/v/keychain)](https://conan.io/center/recipes/keychain)
 
 Keychain is a thin cross-platform wrapper to access the operating system's credential storage in C++.
-Keychain supports getting, adding/replacing, and deleting passwords on macOS, Linux, and Windows.
+Keychain supports getting, adding/replacing, deleting, and listing passwords on macOS, Linux, and Windows.
 
 On macOS the passwords are managed by the Keychain, on Linux they are managed by the Secret Service API/libsecret, and on Windows they are managed by Credential Vault.
 
@@ -48,6 +48,17 @@ int main() {
     if (error) {
         std::cout << error.message << std::endl;
         return 1;
+    }
+
+    // list all credentials for the package
+    auto entries = keychain::listPasswords(package, error);
+    if (error) {
+        std::cout << error.message << std::endl;
+        return 1;
+    }
+    for (const auto &entry : entries) {
+        std::cout << "service: " << entry.service
+                  << ", user: " << entry.user << std::endl;
     }
 
     return 0;
